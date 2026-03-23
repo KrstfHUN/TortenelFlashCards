@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Történelmi Flashcardok</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg: #f5f0e8;
+            --surface: #fffdf8;
+            --border: #d4c9a8;
+            --text: #2c2416;
+            --muted: #7a6e58;
+            --accent: #8b5e3c;
+            --green: #4a7c59;
+            --red: #a33b2a;
+            --blue: #2a5a8b;
+            --card-back: #f0ebe0;
+            --shadow: 0 8px 32px rgba(44,36,22,0.13);
+        }
+        body {
+            font-family: 'Lato', sans-serif;
+            background-color: var(--bg);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 16px;
+            background-image:
+                radial-gradient(ellipse at 20% 50%, rgba(139,94,60,0.06) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(74,124,89,0.05) 0%, transparent 60%);
+        }
+        h1 {
+            font-family: 'Playfair Display', serif;
+            color: var(--text);
+            font-size: 1.7em;
+            letter-spacing: 0.03em;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        .subtitle {
+            color: var(--muted);
+            font-size: 0.85em;
+            font-weight: 300;
+            margin-bottom: 20px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            text-align: center;
+        }
+
+        /* Upload */
+        .upload-zone {
+            width: 420px;
+            max-width: 100%;
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 16px 18px;
+            margin-bottom: 22px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: var(--surface);
+            position: relative;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .upload-zone:hover, .upload-zone.drag-over {
+            border-color: var(--accent);
+            background: #fdf7f0;
+            cursor: pointer;
+        }
+        .upload-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+        }
+        .upload-icon { font-size: 1.5em; flex-shrink: 0; }
+        .upload-text { flex: 1; }
+        .upload-text strong { display: block; font-size: 0.87em; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+        .upload-text span { font-size: 0.74em; color: var(--muted); font-weight: 300; }
+        .upload-status {
+            font-size: 0.76em;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 99px;
+            flex-shrink: 0;
+            display: none;
+        }
+        .upload-status.ok  { background: rgba(74,124,89,0.12); color: var(--green); display: inline-block; }
+        .upload-status.err { background: rgba(163,59,42,0.10); color: var(--red);   display: inline-block; }
+
+        /* Progress */
+        .progress-bar-wrap {
+            width: 420px; max-width: 100%;
+            background: var(--border);
+            border-radius: 99px; height: 5px;
+            margin-bottom: 10px; overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--green));
+            border-radius: 99px;
+            transition: width 0.4s ease;
+        }
+        .progress-label {
+            width: 420px; max-width: 100%;
+            display: flex; justify-content: space-between;
+            font-size: 0.78em; color: var(--muted); margin-bottom: 18px;
+        }
+
+        /* Flashcard */
+        .flashcard-container {
+            width: 420px; max-width: 100%; height: 220px;
+            perspective: 1200px; cursor: pointer; margin-bottom: 10px;
+        }
+        .flashcard {
+            width: 100%; height: 100%; position: relative;
+            transition: transform 0.7s cubic-bezier(0.4,0.2,0.2,1);
+            transform-style: preserve-3d;
+        }
+        .flashcard.flipped { transform: rotateY(180deg); }
+        .front, .back {
+            position: absolute; width: 100%; height: 100%;
+            backface-visibility: hidden;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            border-radius: 14px; padding: 28px 32px;
+            text-align: center; box-shadow: var(--shadow);
+        }
+        .front { background: var(--surface); border: 1.5px solid var(--border); }
+        .front .card-label {
+            font-size: 0.68em; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.14em;
+            color: var(--accent); margin-bottom: 14px;
+        }
+        .front .card-term {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.4em; color: var(--text); line-height: 1.3;
+        }
+        .back { background: var(--card-back); border: 1.5px solid var(--border); transform: rotateY(180deg); }
+        .back .card-label {
+            font-size: 0.68em; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.14em;
+            color: var(--green); margin-bottom: 14px;
+        }
+        .back .card-def { font-size: 0.97em; color: var(--text); line-height: 1.6; }
+
+        .hint { font-size: 0.73em; color: var(--muted); margin-bottom: 18px; letter-spacing: 0.04em; }
+
+        /* Buttons */
+        .buttons { display: flex; gap: 14px; margin-bottom: 18px; }
+        button {
+            padding: 11px 28px; font-size: 0.92em;
+            font-family: 'Lato', sans-serif; font-weight: 700;
+            letter-spacing: 0.05em; border: none; border-radius: 8px;
+            cursor: pointer; transition: opacity 0.15s, transform 0.12s;
+        }
+        button:active { transform: scale(0.97); }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        #nemTudtamGomb { background: var(--red); color: #fff; box-shadow: 0 3px 12px rgba(163,59,42,0.22); }
+        #nemTudtamGomb:hover:not(:disabled) { opacity: 0.88; }
+        #tudtamGomb { background: var(--green); color: #fff; box-shadow: 0 3px 12px rgba(74,124,89,0.22); }
+        #tudtamGomb:hover:not(:disabled) { opacity: 0.88; }
+        .secondary-buttons { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+        #ujraGomb, #ujrakezdesGomb {
+            padding: 10px 22px; font-size: 0.85em; font-weight: 700;
+            letter-spacing: 0.05em; border-radius: 8px; border: none;
+            cursor: pointer; transition: opacity 0.15s, transform 0.12s;
+        }
+        #ujraGomb { background: var(--blue); color: #fff; box-shadow: 0 3px 12px rgba(42,90,139,0.18); }
+        #ujraGomb:hover { opacity: 0.88; }
+        #ujrakezdesGomb { background: var(--accent); color: #fff; box-shadow: 0 3px 12px rgba(139,94,60,0.18); }
+        #ujrakezdesGomb:hover { opacity: 0.88; }
+
+        #eredmenyek { font-size: 1em; color: var(--text); margin-bottom: 14px; text-align: center; }
+        .done-msg { font-family: 'Playfair Display', serif; font-size: 1.15em; color: var(--text); margin-bottom: 10px; }
+        .score-row { display: flex; gap: 20px; justify-content: center; margin-bottom: 6px; }
+        .score-chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 4px 14px; border-radius: 99px; font-size: 0.85em; font-weight: 700;
+        }
+        .score-chip.green { background: rgba(74,124,89,0.12); color: var(--green); }
+        .score-chip.red   { background: rgba(163,59,42,0.10); color: var(--red); }
+    </style>
+</head>
+<body>
+
+<h1>Történelmi Flashcardok</h1>
+<p class="subtitle" id="subtitle">Rendszerváltás &amp; Demokrácia</p>
+
+<div class="upload-zone" id="uploadZone">
+    <input type="file" id="fileInput" accept=".docx">
+    <div class="upload-icon">📄</div>
+    <div class="upload-text">
+        <strong>Kártyák betöltése .docx fájlból</strong>
+        <span>Kattints vagy húzd ide &nbsp;·&nbsp; formátum: <em>Elölap : Hátlap</em> (soronként)</span>
+    </div>
+    <span class="upload-status" id="uploadStatus"></span>
+</div>
+
+<div class="progress-bar-wrap">
+    <div class="progress-bar" id="progressBar" style="width:0%"></div>
+</div>
+<div class="progress-label">
+    <span id="progressText">0 / 0</span>
+    <span id="scoreText">✓ 0 &nbsp; ✗ 0</span>
+</div>
+
+<div class="flashcard-container" id="flashcardContainer">
+    <div class="flashcard" id="flashcard">
+        <div class="front">
+            <div class="card-label">Fogalom</div>
+            <div class="card-term" id="frontText"></div>
+        </div>
+        <div class="back">
+            <div class="card-label">Magyarázat</div>
+            <div class="card-def" id="backText"></div>
+        </div>
+    </div>
+</div>
+
+<p class="hint" id="hint">Kattints a kártyára a válasz megjelenítéséhez</p>
+
+<div class="buttons">
+    <button id="nemTudtamGomb">✗ Nem tudtam</button>
+    <button id="tudtamGomb">✓ Tudtam</button>
+</div>
+
+<div id="eredmenyek"></div>
+<div class="secondary-buttons">
+    <button id="ujraGomb" style="display:none;">↩ Újra a „Nem tudtam"-okkal</button>
+    <button id="ujrakezdesGomb" style="display:none;">↺ Újrakezdés</button>
+</div>
+
+<script>
+const flashcard      = document.getElementById('flashcard');
+const frontText      = document.getElementById('frontText');
+const backText       = document.getElementById('backText');
+const nemTudtamGomb  = document.getElementById('nemTudtamGomb');
+const tudtamGomb     = document.getElementById('tudtamGomb');
+const eredmenyekDiv  = document.getElementById('eredmenyek');
+const ujraGomb       = document.getElementById('ujraGomb');
+const ujrakezdesGomb = document.getElementById('ujrakezdesGomb');
+const progressBar    = document.getElementById('progressBar');
+const progressText   = document.getElementById('progressText');
+const scoreText      = document.getElementById('scoreText');
+const hint           = document.getElementById('hint');
+const fileInput      = document.getElementById('fileInput');
+const uploadZone     = document.getElementById('uploadZone');
+const uploadStatus   = document.getElementById('uploadStatus');
+const subtitleEl     = document.getElementById('subtitle');
+
+// ── Default cards ──────────────────────────────────────────────────────────
+const defaultKartyak = [
+    { elolap: "Göncz Árpád",             hatlap: "Köztársasági elnök (1990–2000); a rendszerváltás utáni demokratikus átmenet szimbolikus alakja." },
+    { elolap: "Horn Gyula",               hatlap: "Miniszterelnök (1994–1998); EU- és NATO-közeledés erősítése." },
+    { elolap: "Orbán Viktor",             hatlap: "Miniszterelnök (1998–2002, 2010–); Alaptörvény (2011), centralizált kormányzás." },
+    { elolap: "Medgyessy Péter",          hatlap: "Miniszterelnök (2002–2004); jóléti intézkedések („100 napos program”)." },
+    { elolap: "Gyurcsány Ferenc",         hatlap: "Miniszterelnök (2004–2009); őszödi beszéd → politikai válság." },
+    { elolap: "Bajnai Gordon",            hatlap: "Miniszterelnök (2009–2010); válságkezelő kormány a gazdasági krízis idején." },
+    { elolap: "Sólyom László",            hatlap: "Köztársasági elnök (2005–2010); az alkotmánybíráskodás meghatározó alakja." },
+    { elolap: "Schmitt Pál",              hatlap: "Köztársasági elnök (2010–2012); lemondás plágiumügy miatt." },
+    { elolap: "Áder János",               hatlap: "Köztársasági elnök (2012–2022); a környezetvédelem hangsúlyozása." },
+    { elolap: "Alaptörvény",              hatlap: "Az állam működését és jogrendjét meghatározó legfelsőbb törvény." },
+    { elolap: "Jogállam",                 hatlap: "Az állam működését törvények korlátozzák." },
+    { elolap: "Demokrácia",               hatlap: "A hatalom forrása a nép." },
+    { elolap: "Parlamentáris rendszer",   hatlap: "A kormány a parlamentnek felel." },
+    { elolap: "Köztársasági elnök",       hatlap: "Az államfő; főleg reprezentatív szerep." },
+    { elolap: "Választási rendszer",      hatlap: "A szabályok összessége, amelyek meghatározzák, hogyan választanak képviselőket." },
+    { elolap: "Kétharmados többség",      hatlap: "Alkotmánymódosításhoz szükséges parlamenti arány." },
+    { elolap: "Parlament",                hatlap: "Törvényhozó testület." },
+    { elolap: "Köztársaság",              hatlap: "Olyan államforma, ahol a vezetőt választják." },
+    { elolap: "Alkotmánybíróság",         hatlap: "A legfőbb alkotmányvédelmi szerv; feladata a törvények Alaptörvénnyel való összhangjának ellenőrzése." },
+    { elolap: "Hatalmi ágak megosztása",  hatlap: "Az államhatalom ne egy kézben összpontosuljon. Három ága: törvényhozás (parlament), végrehajtás (kormány), igazságszolgáltatás (bíróságok)." },
+    { elolap: "Schengeni övezet",         hatlap: "Az EU-n belüli belső határőrizet nélküli terület (Magyarország 2007-ben csatlakozott)." },
+    { elolap: "Népszavazás (referendum)", hatlap: "A közvetlen demokrácia eszköze, amellyel a választópolgárok egy konkrét kérdésben dönthetnek." },
+];
+
+// ── State ──────────────────────────────────────────────────────────────────
+let masterKartyak    = [...defaultKartyak];
+let kevertKartyak    = [];
+let jelenlegiIndex   = 0;
+let tudtamSzamlalo   = 0;
+let nemTudtamKartyak = [];
+
+// ── Core logic ─────────────────────────────────────────────────────────────
+function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
+function init(lista) {
+    masterKartyak    = lista;
+    kevertKartyak    = shuffle(lista);
+    jelenlegiIndex   = 0;
+    tudtamSzamlalo   = 0;
+    nemTudtamKartyak = [];
+    eredmenyekDiv.innerHTML      = '';
+    ujraGomb.style.display       = 'none';
+    ujrakezdesGomb.style.display = 'none';
+    nemTudtamGomb.disabled       = false;
+    tudtamGomb.disabled          = false;
+    hint.style.display           = '';
+    updateProgress();
+    showKartya();
+}
+
+function updateProgress() {
+    const total = kevertKartyak.length;
+    progressBar.style.width  = total > 0 ? (jelenlegiIndex / total * 100) + '%' : '0%';
+    progressText.textContent = jelenlegiIndex + ' / ' + total;
+    scoreText.textContent    = '✓ ' + tudtamSzamlalo + '   ✗ ' + nemTudtamKartyak.length;
+}
+
+function showKartya() {
+    if (!kevertKartyak.length) return;
+    const k = kevertKartyak[jelenlegiIndex];
+    frontText.textContent = k.elolap;
+    backText.textContent  = k.hatlap;
+    flashcard.classList.remove('flipped');
+}
+
+function kovetkezoKartya() {
+    jelenlegiIndex++;
+    updateProgress();
+    jelenlegiIndex < kevertKartyak.length ? showKartya() : eredmenyekKiirasa();
+}
+
+function eredmenyekKiirasa() {
+    frontText.textContent      = '🎉';
+    backText.textContent       = '';
+    flashcard.classList.remove('flipped');
+    hint.style.display         = 'none';
+    nemTudtamGomb.disabled     = true;
+    tudtamGomb.disabled        = true;
+    eredmenyekDiv.innerHTML    =
+        '<div class="done-msg">Kész!</div>' +
+        '<div class="score-row">' +
+            '<span class="score-chip green">✓ Tudtam: ' + tudtamSzamlalo + '</span>' +
+            '<span class="score-chip red">✗ Nem tudtam: ' + nemTudtamKartyak.length + '</span>' +
+        '</div>';
+    ujrakezdesGomb.style.display = 'inline-block';
+    if (nemTudtamKartyak.length > 0) ujraGomb.style.display = 'inline-block';
+}
+
+// ── Docx parsing ───────────────────────────────────────────────────────────
+// Find the index of the first ':' that is NOT inside parentheses or brackets
+function firstColonOutsideParens(str) {
+    let depth = 0;
+    for (let i = 0; i < str.length; i++) {
+        const c = str[i];
+        if (c === '(' || c === '[') depth++;
+        else if (c === ')' || c === ']') depth--;
+        else if (c === ':' && depth === 0) return i;
+    }
+    return -1;
+}
+
+function parseDocxText(raw) {
+    const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const result = [];
+    for (const line of lines) {
+        const idx = firstColonOutsideParens(line);
+        if (idx === -1) continue;
+        const elolap = line.slice(0, idx).trim();
+        const hatlap = line.slice(idx + 1).trim();
+        if (elolap && hatlap) result.push({ elolap, hatlap });
+    }
+    return result;
+}
+
+function loadDocx(file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        mammoth.extractRawText({ arrayBuffer: e.target.result })
+            .then(function(res) {
+                const kartyak = parseDocxText(res.value);
+                if (kartyak.length === 0) {
+                    setUploadStatus('Nem találtam kártyákat. Formátum: Elölap : Hátlap', 'err');
+                    return;
+                }
+                setUploadStatus(kartyak.length + ' kártya betöltve ✓', 'ok');
+                subtitleEl.textContent = file.name.replace(/\.docx$/i, '');
+                init(kartyak);
+            })
+            .catch(function() {
+                setUploadStatus('Hiba a fájl olvasásakor.', 'err');
+            });
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+function setUploadStatus(msg, type) {
+    uploadStatus.textContent = msg;
+    uploadStatus.className   = 'upload-status ' + type;
+}
+
+// ── Event listeners ────────────────────────────────────────────────────────
+document.getElementById('flashcardContainer').addEventListener('click', function() {
+    if (jelenlegiIndex < kevertKartyak.length) flashcard.classList.toggle('flipped');
+});
+
+tudtamGomb.addEventListener('click', function() {
+    tudtamSzamlalo++;
+    kovetkezoKartya();
+});
+nemTudtamGomb.addEventListener('click', function() {
+    nemTudtamKartyak.push(kevertKartyak[jelenlegiIndex]);
+    kovetkezoKartya();
+});
+
+ujraGomb.addEventListener('click', function() {
+    var saved = nemTudtamKartyak.slice();
+    init(saved.length ? saved : masterKartyak);
+});
+ujrakezdesGomb.addEventListener('click', function() {
+    init(masterKartyak);
+});
+
+fileInput.addEventListener('change', function() {
+    if (fileInput.files[0]) loadDocx(fileInput.files[0]);
+});
+
+uploadZone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    uploadZone.classList.add('drag-over');
+});
+uploadZone.addEventListener('dragleave', function() {
+    uploadZone.classList.remove('drag-over');
+});
+uploadZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    var file = e.dataTransfer.files[0];
+    if (file && file.name.toLowerCase().endsWith('.docx')) {
+        loadDocx(file);
+    } else {
+        setUploadStatus('Csak .docx fájlt fogadok el.', 'err');
+    }
+});
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+init(defaultKartyak);
+</script>
+</body>
+</html>
